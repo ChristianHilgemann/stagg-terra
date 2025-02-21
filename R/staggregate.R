@@ -269,7 +269,7 @@ infer_layer_datetimes <- function(data, start_date, time_interval) {
 }
 
 # Function to merge with geoweights and aggregate by polygon
-polygon_aggregation <- function(clim_dt, weights_dt, list_names, time_agg){
+polygon_aggregation <- function(clim_dt, weights_dt, list_names, time_agg, weights_join_tolerance_x, weights_join_tolerance_y){
 
   ## Merge weights with climate spatRaster
   ## -----------------------------------------------
@@ -283,8 +283,50 @@ polygon_aggregation <- function(clim_dt, weights_dt, list_names, time_agg){
   clim_dt[, date := stringr::str_replace(date, "^[^0-9]+", "")] # Remove any non-digit characters from the start of the string
   clim_dt[, date := lubridate::as_datetime(date)]
 
-  # Keyed merge on the x/y column
-  merged_dt <- clim_dt[weights_dt, allow.cartesian = TRUE] # cols: x, y, date, value cols 1:k, poly_id, w_area, weight (if weights = T)
+  # Join overlay_weights and climate data table
+  if(weights_join_tolerance_x == 0 & weights_join_tolerance_y == 0){
+
+    # Keyed merge on the x/y column
+    merged_dt <- clim_dt[weights_dt, allow.cartesian = TRUE] # cols: x, y, date, value cols 1:k, poly_id, w_area, weight (if weights = T)
+
+  } else{
+
+    # Since data.table doesn't allow arithmatic in nonequi-joins, create tolerance columns now
+    weights_dt[, x_low := x - weights_join_tolerance_x]
+    weights_dt[, x_high := x + weights_join_tolerance_x]
+    weights_dt[, y_low := y - weights_join_tolerance_y]
+    weights_dt[, y_high := y + weights_join_tolerance_y]
+    weights_dt[, x := NULL]
+    weights_dt[, y := NULL]
+
+
+    # Determine which columns to keep in join,
+    # format as arguments that can directly be supplied to j
+    # through eval and parse
+    cols_to_keep <- c(
+
+      # Add these in manually (referring to clim_dt$x by "x.x" prevents the
+      # column from being overwritten in the nonequi-join below)
+      'x.x',
+      'x.y',
+
+      # Keep all column names except the tolerance columns created above
+      setdiff(colnames(clim_dt), c('x', 'y')),
+      setdiff(colnames(weight_dt), c('x_low', 'x_high', 'y_low', 'y_high')))
+
+
+    # Merge based on tolerance columns
+    merged_dt <- clim_dt[weights_dt, # Right join
+                         allow.cartesian = TRUE,
+
+                         # Specify which columns to keep
+                         j = ..cols_to_keep,
+                         on = .(x >= x_low,
+                                x <= x_high,
+                                y >= y_low,
+                                y <= y_high)]
+    setnames(merged_dt, c('x.x', 'x.y'), c('x', 'y'))
+  }
 
   ## Multiply weights x climate value (all 1:k values); aggregate by month and polygon
   ## -----------------------------------------------
@@ -404,7 +446,7 @@ polygon_aggregation <- function(clim_dt, weights_dt, list_names, time_agg){
 #' head(polynomial_output)
 #'
 #' @export
-staggregate_polynomial <- function(data, overlay_weights, daily_agg, time_agg = "month", start_date = NA, time_interval = "1 hour", degree){
+staggregate_polynomial <- function(data, overlay_weights, daily_agg, time_agg = "month", start_date = NA, time_interval = "1 hour", weights_join_tolerance = 0, degree){
 
   # If the start date is supplied, overwrite the spatRaster's layer names to reflect the specified temporal metadata
   if(!is.na(start_date)){
@@ -416,6 +458,18 @@ staggregate_polynomial <- function(data, overlay_weights, daily_agg, time_agg = 
   if(time_agg == "hour" & daily_agg != "none"){
     message(crayon::yellow("Hourly output requested. Automatically setting daily_agg to \'none\'"))
     daily_agg = "none"
+  }
+
+  # If tolerance supplied is one number, apply to both x and y.
+  # If two numbers, apply first to x and second to y
+  if(length(weights_join_tolerance) == 1){
+    weights_join_tolerance_x <- weights_join_tolerance
+    weights_join_tolerance_y <- weights_join_tolerance
+  } else if(length(weights_join_tolerance == 2)){
+    weights_join_tolerance_x <- weights_join_tolerance[1]
+    weights_join_tolerance_y <- weights_join_tolerance[2]
+  } else{
+    stop(crayon::red("Please provide one digit or a vector of only two digits for weights_join_tolerance."))
   }
 
   # Aggregate climate data to daily values
