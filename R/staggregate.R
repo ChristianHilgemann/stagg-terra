@@ -291,15 +291,20 @@ polygon_aggregation <- function(clim_dt, weights_dt, list_names, time_agg, weigh
 
   } else{
 
+    # Create a copy of the weights data table so we don't change the user's data
+    # without their knowledge. (data.table creates "shallow copies" unless
+    # explicitly told to do otherwise).
+    copied_weights_dt <- data.table::copy(weights_dt)
+
     # Since data.table doesn't allow arithmatic in nonequi-joins, create tolerance columns now
-    weights_dt[, x_low := x - weights_join_tolerance_x]
-    weights_dt[, x_high := x + weights_join_tolerance_x]
-    weights_dt[, y_low := y - weights_join_tolerance_y]
-    weights_dt[, y_high := y + weights_join_tolerance_y]
+    copied_weights_dt[, x_low := x - weights_join_tolerance_x]
+    copied_weights_dt[, x_high := x + weights_join_tolerance_x]
+    copied_weights_dt[, y_low := y - weights_join_tolerance_y]
+    copied_weights_dt[, y_high := y + weights_join_tolerance_y]
 
     #  Remove x and y columns to avoid confusion in join
-    weights_dt[, x := NULL]
-    weights_dt[, y := NULL]
+    copied_weights_dt[, x := NULL]
+    copied_weights_dt[, y := NULL]
 
 
     # Determine which columns to keep in join,
@@ -314,11 +319,11 @@ polygon_aggregation <- function(clim_dt, weights_dt, list_names, time_agg, weigh
 
       # Keep all column names except the tolerance columns created above
       setdiff(colnames(clim_dt), c('x', 'y')),
-      setdiff(colnames(weights_dt), c('x_low', 'x_high', 'y_low', 'y_high')))
+      setdiff(colnames(copied_weights_dt), c('x_low', 'x_high', 'y_low', 'y_high')))
 
 
     # Merge based on tolerance columns
-    merged_dt <- clim_dt[weights_dt, # Right join
+    merged_dt <- clim_dt[copied_weights_dt, # Right join
                          allow.cartesian = TRUE,
 
                          # Specify which columns to keep
