@@ -262,10 +262,15 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
   # If it doesn't error out then all weight sums = 1
   message(crayon::green('All weights sum to 1.'))
 
-  ## Convert back to 0-360
-  ## -----------------------------------------------
+  ## Return table in coordinate system that matches that of the climate data
+  ## ------------------------------------------------------------------------
 
-  w_norm[, x := data.table::fifelse(x < 0, x + 360, x)]
+  if(rast_xmax > 180 + rast_res / 2) {
+
+    w_norm[, x := data.table::fifelse(x < 0, x + 360, x)]
+
+  }
+
 
   return(w_norm)
 
