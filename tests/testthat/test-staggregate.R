@@ -3,7 +3,7 @@
 testthat::test_that(
   "as.data.table.terra has correct output type, class, and column names",
   {
-    output <- as.data.table.raster.terra(temp_nj_jun_2024_era5[[1]], xy = TRUE)
+    output <- as_data_table_terra(temp_nj_jun_2024_era5[[1]], xy = TRUE)
 
     expect_type(output, "list")
     expect_is(output, "data.table")
@@ -48,7 +48,7 @@ testthat::test_that(
   "polygon_aggregation has correct output type, class, and column names",
   {
     # Make clim_dt input for polygon_aggregation() (the numbers are nonsensical)
-    clim_dt_input <- as.data.table.raster.terra(temp_nj_jun_2024_era5, xy = TRUE) %>%
+    clim_dt_input <- as_data_table_terra(temp_nj_jun_2024_era5, xy = TRUE) %>%
       dplyr::select(c(1,2, 4:10)) %>%
       tidyr::pivot_longer(cols = 3:9, names_to = "date", values_to = "order_1") %>%
       dplyr::mutate(x = x + 360) %>%
@@ -57,7 +57,9 @@ testthat::test_that(
     output <- polygon_aggregation(clim_dt_input,
                                   overlay_weights_nj,
                                   c("order_1"),
-                                  "hour")
+                                  "hour",
+                                  weights_join_tolerance_x = 0,
+                                  weights_join_tolerance_y = 0)
 
     expect_type(output, "list")
     expect_is(output, "data.frame")

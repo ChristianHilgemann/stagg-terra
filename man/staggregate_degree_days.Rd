@@ -10,6 +10,7 @@ staggregate_degree_days(
   time_agg = "month",
   start_date = NA,
   time_interval = "1 hour",
+  weights_join_tolerance = 0,
   thresholds
 )
 }
@@ -32,6 +33,16 @@ information in the layer names and they do not need to be manually supplied.}
 aggregated. To be input in a format compatible with seq(), e.g.
 \code{'1 day'} or \code{'3 months'}. The default is \code{'1 hour'} and this argument is
 required if the \code{start_date} argument is not \code{NA}.}
+
+\item{weights_join_tolerance}{the tolerance to use when joining
+overlay_weights with the climate data by the x and y columns. This is useful
+when the height/width of your data cells expressed in degrees is a very long
+decimal. The default, \code{0}, performs a keyed equi-join. Anything other than 0
+performs a nonequi-join wherein latitudes/longitudes within the specified
+tolerance (inclusive) are considered a match. Passing a single number results
+in the tolerance being the same for x and y, but you can also pass a vector
+of two numbers to have the first specify the x tolerance and second specify
+the y tolerance.}
 
 \item{thresholds}{A vector of temperature thresholds critical to a crop}
 }
