@@ -70,7 +70,7 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
  }
 
   ## check if coordinate systems match, if no shift raster to -180 to 180
-  if(rast_xmax > 180 + rast_res / 2) {
+  if(rast_xmax > 180 + rast_res) {
 
     message(crayon::yellow('Aligning longitudes to standard coordinates.'))
 
@@ -265,7 +265,7 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
   ## Return table in coordinate system that matches that of the climate data
   ## ------------------------------------------------------------------------
 
-  if(rast_xmax > 180 + rast_res / 2) {
+  if(rast_xmax > 180 + rast_res) {
 
     w_norm[, x := data.table::fifelse(x < 0, x + 360, x)]
 

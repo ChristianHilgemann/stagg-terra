@@ -53,10 +53,10 @@ daily_aggregation <- function(data, overlay_weights, daily_agg, time_interval='1
 
 
   # Determine whether the climate data is in climate (0 to 360) or standard (-180 to 180) coordinates
-  if(terra::ext(clim_stack)$xmin <= 0 - terra::xres(clim_stack)){
-    coord_alignment <- "standard"
-  } else{
+  if(terra::ext(clim_stack)$xmax > 180 + terra::xres(clim_stack)){
     coord_alignment <- "climate"
+  } else{
+    coord_alignment <- "standard"
   }
 
   # Now, determine if the polygons were likely in a different coordinate system

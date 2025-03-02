@@ -137,7 +137,7 @@ secondary_weights <- function(secondary_raster, grid = era5_grid, extent = "full
 
 
   ## if secondary raster in -180 to 180 and clim raster 0-360, rotate clim raster
-  if(s_rast_xmax <= (180 + s_rast_xres / 2) & c_rast_xmax >= (180 + c_rast_xres / 2)) {
+  if(s_rast_xmax < (180 + s_rast_xres) & c_rast_xmax > (180 + c_rast_xres)) {
 
     message(crayon::yellow('Longitude coordinates do not match. Aligning longitudes to standard coordinates.'))
 
@@ -160,7 +160,7 @@ secondary_weights <- function(secondary_raster, grid = era5_grid, extent = "full
   }
 
   ## if secondary raster in 0-360 and clim raster -180 to 180, rotate secondary raster
-  if(s_rast_xmax >= (180 + s_rast_xres / 2) & c_rast_xmax <= (180 + c_rast_xres / 2)) {
+  if(s_rast_xmax > (180 + s_rast_xres / 2) & c_rast_xmax < (180 + c_rast_xres / 2)) {
 
     message(crayon::yellow('Longitude coordinates do not match. Aligning longitudes to standard coordinates.'))
 
