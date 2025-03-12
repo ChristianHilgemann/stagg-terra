@@ -72,6 +72,12 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
   ## check if coordinate systems match, if no shift raster to -180 to 180
   if(rast_xmax > 180 + rast_res) {
 
+    # Make sure the cell widths aren't peculiar otherwise the rotate function will
+    # mess things up
+    if(360 %% terra::xres(grid) == 0){
+      stop(crayon::red('Grid is in climate coordinate system (longitude 0 to 360) and grid cell width does not divide 360 evenly, making accurate alignment impossible.'))
+    }
+
     message(crayon::yellow('Aligning longitudes to standard coordinates.'))
 
     ## xmin for climate raster
