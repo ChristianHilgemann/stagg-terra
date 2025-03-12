@@ -41,7 +41,7 @@ daily_aggregation <- function(data, overlay_weights, daily_agg, time_interval='1
   weights_dt <- data.table::as.data.table(overlay_weights)
 
   # read in climate data and coerce if not a spat raster
-  if(methods::is(data,"SpatRaster")){
+  if(methods::is(data, "SpatRaster")){
 
     clim_stack <- data
 
@@ -52,62 +52,42 @@ daily_aggregation <- function(data, overlay_weights, daily_agg, time_interval='1
   }
 
 
-  # shift into 0 to 360 if not already in that format (inverse of rotate())
-  # ----------------------------------------------------------------------------
-
-  # prime meridian = pm
-
-  # For this section, consider any cell touching the pm (non-inclusive meaning
-  # not if the boarder is right on it) to be part of the right side
-
-  # Check to see if any of the grid cells are fully on the left of the pm, which
-  # indicates -180_180 format
-  if(terra::ext(clim_stack)$xmin <= 0 - terra::xres(clim_stack)) {
-
-    # If it's on both sides of 0, use rotate
-    if(terra::ext(clim_stack)$xmax > 0){
-
-      # create global extent for padding so rotate function can be used
-      global_extent <- terra::ext(-180, 180, -90, 90)
-
-      # pad
-      clim_stack <- terra::extend(clim_stack, global_extent)
-
-
-      # rotate
-      clim_stack <- terra::rotate(clim_stack, left = FALSE)
-
-    } else{ # If it's only negative, use shift (much faster)
-
-      clim_stack <- terra::shift(clim_stack, dx = 360)
-    }
-
-
-
-
-
-
-
+  # Determine whether the climate data is in climate (0 to 360) or standard (-180 to 180) coordinates
+  if(terra::ext(clim_stack)$xmax > 180 + terra::xres(clim_stack)){
+    coord_alignment <- "climate"
+  } else{
+    coord_alignment <- "standard"
   }
 
-  # Check if overlay_weights (the polygons) span prime meridian, but don't go
-  # all the way from 0 to 360 (continent of Europe, for instance). If so, we
-  # want to crop the data such that we don't have to read in a full band.
+  # Now, determine if the polygons were likely in a different coordinate system
+  if(coord_alignment == "standard"){
+    polygons_split <- (
+      max(weights_dt[,x]) > 180 - terra::xres(clim_stack) & # has cell next to 180
+      min(weights_dt[,x]) < -180 + terra::xres(clim_stack) # has cell next to -180
+    )
+  }
 
-  # Has a cell within one of pm negative
-  is_near_360 <- max(weights_dt[,x]) > 360 - terra::xres(clim_stack)
+  if(coord_alignment == "climate"){
+    polygons_split <- (
+      max(weights_dt[,x]) > 360 - terra::xres(clim_stack) & # has cell next to 360
+      min(weights_dt[,x]) < terra::xres(clim_stack) # has cell next to 0
+    )
+  }
 
-  # Has a cell that touches 0
-  is_near_0 <- min(weights_dt[,x]) < terra::xres(clim_stack)
+  # Check for the final case in which the polygons just span the entire globe
+  if(length(unique(weights_dt[,x] >= terra::ncol(clim_stack)))){
+    polygons_split <- FALSE
+  }
 
 
-  # If it's near both edges, assume we are crossing the pm
-  if(is_near_360 & is_near_0){
+  # If we've split the polygons, try to find a more memory efficient spot to do our cropping than across 360 / -180 line,
+  # unless we have peculiar cell widths that would make this a bad idea
+  if(polygons_split & 360 %% terra::xres(clim_stack) == 0){
 
     # Find the widest xgap that exists to be the cropping location For instance,
     # if x values are 0, 60, 120, 300, 360, then crop such that left is [0 - 120] and
     # right is [300 - 360] (saves reading in 180 degrees of data)
-    x_vector <- unique(weights_dt[,x])
+    x_vector <- sort(unique(weights_dt[,x]))
 
     # Get cropping locations by finding largest gap and making left side's xmax
     # the x value to the left and right side's xmin the x value to the right
