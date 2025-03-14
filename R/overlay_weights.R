@@ -97,8 +97,13 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
     ## rotate
     clim_area_raster <- terra::rotate(clim_area_raster)
 
-    }
+  }
 
+  # Extend the grid to cover all polygons consistent with the extended rotate
+  # above. exact_extract already does this in the background to a certain
+  # degree, so this just allows us to be explicit about how we handle NAs later
+  # on.
+  clim_area_raster <- terra::extend(clim_area_raster, terra::ext(polygons), snap = 'out')
 
   ## Match raster and polygon crs
   crs_raster <- terra::crs(clim_area_raster)
