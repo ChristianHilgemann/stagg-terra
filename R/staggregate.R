@@ -41,7 +41,7 @@ daily_aggregation <- function(data, overlay_weights, daily_agg, time_interval='1
   weights_dt <- data.table::as.data.table(overlay_weights)
 
   # read in climate data and coerce if not a spat raster
-  if(methods::is(data, "SpatRaster")){
+  if(inherits(data, "SpatRaster")){
 
     clim_stack <- data
 
