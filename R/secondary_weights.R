@@ -72,12 +72,20 @@ secondary_weights <- function(secondary_raster, grid = era5_grid, extent = "full
 
   }
 
+  ## check to make sure climate raster is a spatraster, change if not
+  if (!inherits(grid, "SpatRaster")) {
+    clim_raster <- terra::rast(grid)
+  } else {
+
+    clim_raster <- grid
+
+  }
+
   # Create climate raster from input raster
-  clim_raster <- terra::rast(grid) # only reads the first band
+  clim_raster <- clim_raster[[1]] # only reads the first band
 
   ## climate raster information for creating buffer and doing checks/rotations
   c_rast_xmax <- terra::ext(clim_raster)$xmax
-  # c_rast_xmin <- raster::extent(clim_raster)@xmin
 
   ## find xy resolution for rasters
   c_rast_xres <- terra::xres(clim_raster)
@@ -160,7 +168,7 @@ secondary_weights <- function(secondary_raster, grid = era5_grid, extent = "full
   }
 
   ## if secondary raster in 0-360 and clim raster -180 to 180, rotate secondary raster
-  if(s_rast_xmax > (180 + s_rast_xres / 2) & c_rast_xmax < (180 + c_rast_xres / 2)) {
+  if(s_rast_xmax > (180 + s_rast_xres) & c_rast_xmax < (180 + c_rast_xres)) {
 
     message(crayon::yellow('Longitude coordinates do not match. Aligning longitudes to standard coordinates.'))
 
