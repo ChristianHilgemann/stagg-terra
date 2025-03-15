@@ -249,7 +249,7 @@ infer_layer_datetimes <- function(data, start_date, time_interval) {
 }
 
 # Function to merge with geoweights and aggregate by polygon
-polygon_aggregation <- function(clim_dt, weights_dt, list_names, time_agg, weights_join_tolerance_x, weights_join_tolerance_y){
+polygon_aggregation <- function(clim_dt, weights_dt, list_names, time_agg, weights_join_tolerance_x, weights_join_tolerance_y, na_rm){
 
   ## Merge weights with climate spatRaster
   ## -----------------------------------------------
@@ -322,57 +322,85 @@ polygon_aggregation <- function(clim_dt, weights_dt, list_names, time_agg, weigh
   # Otherwise multiply by just area weights
   if("weight" %in% names(merged_dt)){
     merged_dt[, (list_names) := lapply(list_names, function(x) {get(x) * weight})]
+    weight_col <- "weight"
   } else {
     merged_dt[, (list_names) := lapply(list_names, function(x) {get(x) * w_area})]
+    weight_col <- "w_area"
   }
 
   # Separate year, month, day, and time columns
   merged_dt[, ':=' (year = lubridate::year(date),
                     month = lubridate::month(date),
                     day = lubridate::day(date),
-                    hour = lubridate::hour(date))] # NOTE: if the timestep is smaller than hourly, the minutes and seconds will not be recorded. However, this does not affect the output since the lowest aggregation level possible is 'hour'.
+                    hour = lubridate::hour(date),
+                    minute = lubridate::minute(date))]
+
+
+  # Determine if we need to sum weights to "ignore" NAs
+  if(na_rm){
+    sum_cols <- c(weight_col, list_names)
+  }else{
+    sum_cols <- list_names
+  }
 
   # Temporal Aggregation
   if(time_agg == "year"){
     message(crayon::green("Aggregating by polygon and year"))
 
     sum_by_poly <- merged_dt[,  lapply(.SD, sum), by = .(poly_id, year),
-                             .SDcols = list_names]
+                             .SDcols = sum_cols]
 
     ## Order columns
-    data.table::setcolorder(sum_by_poly, neworder = c('year', 'poly_id', list_names))
-  }
+    data.table::setcolorder(sum_by_poly, neworder = c('year', 'poly_id', sum_cols))
 
-  if(time_agg == "month"){
+  }else if(time_agg == "month"){
     message(crayon::green("Aggregating by polygon and month"))
 
     sum_by_poly <- merged_dt[,  lapply(.SD, sum), by = .(poly_id, year, month),
-                             .SDcols = list_names]
+                             .SDcols = sum_cols]
 
     ## Order columns
-    data.table::setcolorder(sum_by_poly, neworder = c('year', 'month', 'poly_id', list_names))
-  }
+    data.table::setcolorder(sum_by_poly, neworder = c('year', 'month', 'poly_id', sum_cols))
 
-  if(time_agg == "day"){
-    message(crayon::green("Aggregating by polygon"))
+  }else if(time_agg == "day"){
+    message(crayon::green("Aggregating by polygon and date"))
 
     sum_by_poly <- merged_dt[,  lapply(.SD, sum), by = .(poly_id, year, month, day),
-                             .SDcols = list_names]
+                             .SDcols = sum_cols]
 
     ## Order columns
-    data.table::setcolorder(sum_by_poly, neworder = c('year', 'month', 'day', 'poly_id', list_names))
+    data.table::setcolorder(sum_by_poly, neworder = c('year', 'month', 'day', 'poly_id', sum_cols))
+
+  }else if(time_agg == "hour"){
+    message(crayon::green("Aggregating by polygon and hour"))
+    sum_by_poly <- merged_dt[,  lapply(.SD, sum), by = .(poly_id, year, month, day, hour),
+                             .SDcols = sum_cols]
+
+    ## Order columns
+    data.table::setcolorder(sum_by_poly, neworder = c('year', 'month', 'day', 'hour', 'poly_id', sum_cols))
+
+  }else{
+
+    message(crayon::green("Aggregating by polygon and time"))
+    sum_by_poly <- merged_dt[,  lapply(.SD, sum), by = .(poly_id, year, month, day, hour, minute),
+                             .SDcols = sum_cols]
+
+    ## Order columns
+    data.table::setcolorder(sum_by_poly, neworder = c('year', 'month', 'day', 'hour', 'minute', 'poly_id', sum_cols))
   }
 
 
+  # If we need to re-weight to remove influence of NAs on means, divide by the
+  # now summed weights. For instance, if .25 of the cells (by weight) was NA,
+  if(na_rm){
+    if(weight_col == "weight"){
+      sum_by_poly[, (list_names) := lapply(list_names, function(x) {get(x) / weight})]
+    } else{
+      sum_by_poly[, (list_names) := lapply(list_names, function(x) {get(x) / w_area})]
+    }
 
-
-  if(time_agg == "hour"){
-    message(crayon::green("Aggregating by polygon"))
-    sum_by_poly <- merged_dt[,  lapply(.SD, sum), by = .(poly_id, year, month, day, hour),
-                             .SDcols = list_names]
-
-    ## Order columns
-    data.table::setcolorder(sum_by_poly, neworder = c('year', 'month', 'day', 'hour', 'poly_id', list_names))
+    # Remove the NA data
+    stats::na.omit(sum_by_poly, "year")
   }
 
 
@@ -420,6 +448,9 @@ polygon_aggregation <- function(clim_dt, weights_dt, list_names, time_agg, weigh
 #' in the tolerance being the same for x and y, but you can also pass a vector
 #' of two numbers to have the first specify the x tolerance and second specify
 #' the y tolerance.
+#' @param na_rm whether to remove NAs in the climate data and adjust the
+#' overlay weights so that the weights of non-na cells sum to 1 across each
+#' polygon. The default is `FALSE`.
 #' @param degree the highest exponent to raise the data to
 #'
 #' @examples
@@ -442,7 +473,7 @@ polygon_aggregation <- function(clim_dt, weights_dt, list_names, time_agg, weigh
 #' head(polynomial_output)
 #'
 #' @export
-staggregate_polynomial <- function(data, overlay_weights, daily_agg, time_agg = "month", start_date = NA, time_interval = "1 hour", weights_join_tolerance = 0, degree){
+staggregate_polynomial <- function(data, overlay_weights, daily_agg, time_agg = "month", start_date = NA, time_interval = "1 hour", weights_join_tolerance = 0, na_rm = FALSE, degree){
 
   # If the start date is supplied, overwrite the spatRaster's layer names to reflect the specified temporal metadata
   if(!is.na(start_date)){
@@ -522,7 +553,8 @@ staggregate_polynomial <- function(data, overlay_weights, daily_agg, time_agg = 
     list_names,
     time_agg,
     weights_join_tolerance_x = weights_join_tolerance_x,
-    weights_join_tolerance_y = weights_join_tolerance_y)
+    weights_join_tolerance_y = weights_join_tolerance_y,
+    na_rm = na_rm)
 
   return(sum_by_poly)
 
@@ -573,6 +605,9 @@ staggregate_polynomial <- function(data, overlay_weights, daily_agg, time_agg = 
 #' in the tolerance being the same for x and y, but you can also pass a vector
 #' of two numbers to have the first specify the x tolerance and second specify
 #' the y tolerance.
+#' @param na_rm whether to remove NAs in the climate data and adjust the
+#' overlay weights so that the weights of non-na cells sum to 1 across each
+#' polygon. The default is `FALSE`.
 #' @param knot_locs where to place the knots
 #'
 #' @examples
@@ -595,7 +630,7 @@ staggregate_polynomial <- function(data, overlay_weights, daily_agg, time_agg = 
 #' head(spline_output)
 #'
 #' @export
-staggregate_spline <- function(data, overlay_weights, daily_agg, time_agg = "month", start_date = NA, time_interval = "1 hour", weights_join_tolerance = 0, knot_locs){
+staggregate_spline <- function(data, overlay_weights, daily_agg, time_agg = "month", start_date = NA, time_interval = "1 hour", weights_join_tolerance = 0, na_rm = FALSE, knot_locs){
 
   # If the start date is supplied, overwrite the raster's layer names to reflect the specified temporal metadata
   if(!is.na(start_date)){
@@ -713,7 +748,8 @@ staggregate_spline <- function(data, overlay_weights, daily_agg, time_agg = "mon
     list_names,
     time_agg,
     weights_join_tolerance_x = weights_join_tolerance_x,
-    weights_join_tolerance_y = weights_join_tolerance_y)
+    weights_join_tolerance_y = weights_join_tolerance_y,
+    na_rm = na_rm)
 
   return(sum_by_poly)
 }
@@ -754,6 +790,9 @@ staggregate_spline <- function(data, overlay_weights, daily_agg, time_agg = "mon
 #' in the tolerance being the same for x and y, but you can also pass a vector
 #' of two numbers to have the first specify the x tolerance and second specify
 #' the y tolerance.
+#' @param na_rm whether to remove NAs in the climate data and adjust the
+#' overlay weights so that the weights of non-na cells sum to 1 across each
+#' polygon. The default is `FALSE`.
 #' @param bin_breaks A vector of bin boundaries to split the data by
 #'
 #' @examples
@@ -778,7 +817,7 @@ staggregate_spline <- function(data, overlay_weights, daily_agg, time_agg = "mon
 #' head(bin_output)
 #'
 #' @export
-staggregate_bin <- function(data, overlay_weights, daily_agg, time_agg = "month", start_date = NA, time_interval = '1 hour', weights_join_tolerance = 0, bin_breaks){
+staggregate_bin <- function(data, overlay_weights, daily_agg, time_agg = "month", start_date = NA, time_interval = '1 hour', weights_join_tolerance = 0, na_rm = FALSE, bin_breaks){
 
   # If the start date is supplied, overwrite the raster's layer names to reflect the specified temporal metadata
   if(!is.na(start_date)){
@@ -894,7 +933,8 @@ staggregate_bin <- function(data, overlay_weights, daily_agg, time_agg = "month"
     list_names,
     time_agg,
     weights_join_tolerance_x = weights_join_tolerance_x,
-    weights_join_tolerance_y = weights_join_tolerance_y)
+    weights_join_tolerance_y = weights_join_tolerance_y,
+    na_rm = na_rm)
 
   return(sum_by_poly)
 }
@@ -934,6 +974,9 @@ staggregate_bin <- function(data, overlay_weights, daily_agg, time_agg = "month"
 #' in the tolerance being the same for x and y, but you can also pass a vector
 #' of two numbers to have the first specify the x tolerance and second specify
 #' the y tolerance.
+#' @param na_rm whether to remove NAs in the climate data and adjust the
+#' overlay weights so that the weights of non-na cells sum to 1 across each
+#' polygon. The default is `FALSE`.
 #' @param thresholds A vector of temperature thresholds critical to a crop
 #'
 #' @examples
@@ -954,7 +997,7 @@ staggregate_bin <- function(data, overlay_weights, daily_agg, time_agg = "month"
 #' head(degree_days_output)
 #'
 #' @export
-staggregate_degree_days <- function(data, overlay_weights, time_agg = "month", start_date = NA, time_interval = '1 hour', weights_join_tolerance = 0, thresholds){
+staggregate_degree_days <- function(data, overlay_weights, time_agg = "month", start_date = NA, time_interval = '1 hour', weights_join_tolerance = 0, na_rm = FALSE, thresholds){
 
   # If the start date is supplied, overwrite the raster's layer names to reflect the specified temporal metadata
   if(!is.na(start_date)){
@@ -1070,7 +1113,8 @@ staggregate_degree_days <- function(data, overlay_weights, time_agg = "month", s
     list_names,
     time_agg,
     weights_join_tolerance_x = weights_join_tolerance_x,
-    weights_join_tolerance_y = weights_join_tolerance_y)
+    weights_join_tolerance_y = weights_join_tolerance_y,
+    na_rm = na_rm)
 
   return(sum_by_poly)
 

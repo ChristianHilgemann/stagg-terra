@@ -59,7 +59,8 @@ testthat::test_that(
                                   c("order_1"),
                                   "hour",
                                   weights_join_tolerance_x = 0,
-                                  weights_join_tolerance_y = 0)
+                                  weights_join_tolerance_y = 0,
+                                  na_rm = F)
 
     expect_type(output, "list")
     expect_is(output, "data.frame")
