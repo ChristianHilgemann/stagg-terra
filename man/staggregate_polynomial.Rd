@@ -12,6 +12,7 @@ staggregate_polynomial(
   start_date = NA,
   time_interval = "1 hour",
   weights_join_tolerance = 0,
+  na_rm = FALSE,
   degree
 )
 }
@@ -50,6 +51,10 @@ tolerance (inclusive) are considered a match. Passing a single number results
 in the tolerance being the same for x and y, but you can also pass a vector
 of two numbers to have the first specify the x tolerance and second specify
 the y tolerance.}
+
+\item{na_rm}{whether to remove NAs in the climate data and adjust the
+overlay weights so that the weights of non-na cells sum to 1 across each
+polygon. The default is \code{FALSE}.}
 
 \item{degree}{the highest exponent to raise the data to}
 }
