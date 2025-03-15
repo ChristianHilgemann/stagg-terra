@@ -147,6 +147,12 @@ secondary_weights <- function(secondary_raster, grid = era5_grid, extent = "full
   ## if secondary raster in -180 to 180 and clim raster 0-360, rotate clim raster
   if(s_rast_xmax < (180 + s_rast_xres) & c_rast_xmax > (180 + c_rast_xres)) {
 
+    # Make sure the cell widths aren't peculiar otherwise the rotate function will
+    # mess things up
+    if(360 %% terra::xres(c_rast_xres) != 0){
+      stop(crayon::red('Grid is in climate coordinate system (longitude 0 to 360) and grid cell width does not divide 360 evenly, making accurate alignment impossible.'))
+    }
+
     message(crayon::yellow('Longitude coordinates do not match. Aligning longitudes to standard coordinates.'))
 
     ## check if raster needs to be padded, extend if needed
@@ -169,6 +175,12 @@ secondary_weights <- function(secondary_raster, grid = era5_grid, extent = "full
 
   ## if secondary raster in 0-360 and clim raster -180 to 180, rotate secondary raster
   if(s_rast_xmax > (180 + s_rast_xres) & c_rast_xmax < (180 + c_rast_xres)) {
+
+    # Make sure the cell widths aren't peculiar otherwise the rotate function will
+    # mess things up
+    if(360 %% terra::xres(s_rast_xres) != 0){
+      stop(crayon::red('Grid is in climate coordinate system (longitude 0 to 360) and grid cell width does not divide 360 evenly, making accurate alignment impossible.'))
+    }
 
     message(crayon::yellow('Longitude coordinates do not match. Aligning longitudes to standard coordinates.'))
 
