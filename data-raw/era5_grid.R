@@ -39,7 +39,9 @@ library(magrittr)
 era5_grid <- raster::raster("data-raw/ERA5_one_hour.nc") %>%
   raster::readAll() %>%
   raster::setValues(values = 0) %>%
-  raster::rotate()
+  terra::rast() %>%
+  terra::rotate() %>%
+  raster::raster()
 
 names(era5_grid) <- "X"
 
