@@ -43,10 +43,14 @@
 #' @export
 overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondary_weights = NULL){
 
-  # Create raster (Putting terra::rast() here creates, for unknown reasons,
-  # issues with devtools::check())
-  clim_raster <- as(grid, "SpatRaster") # only reads the first band
+  ## check to make sure climate raster is a spatraster, change if not
+  if (!inherits(grid, "SpatRaster")) {
+    clim_raster <- terra::rast(grid)
+  } else {
 
+    clim_raster <- grid
+
+  }
 
   ## Raster cell area
   ## -----------------------------------------------
@@ -133,11 +137,11 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
     s_weight_max <- max(weights_dt$x)
 
     ## if secondary_weights is in 0-360, adjust x val
-    if(s_weight_max > 180 + rast_res) {
+    if(s_weight_max > 180 + rast_res / 2) {
 
       message(crayon::yellow('Adjusting secondary weights longitude to standard coordinates.'))
 
-      weights_dt[, x := data.table::fifelse(x > 180 + rast_res, x - 360, x)]
+      weights_dt[, x := data.table::fifelse(x > 180 + rast_res / 2, x - 360, x)]
 
     }
 
@@ -278,7 +282,7 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
 
   if(rast_xmax > 180 + rast_res) {
 
-    w_norm[, x := data.table::fifelse(x < 0, x + 360, x)]
+    w_norm[, x := data.table::fifelse(x < 0 + rast_res / 2, x + 360, x)]
 
   }
 
