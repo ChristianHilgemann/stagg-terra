@@ -51,12 +51,6 @@ secondary_weights <- function(secondary_raster, grid = era5_grid, extent = "full
       secondary_raster <- terra::rast(secondary_raster)
     }
 
-  ## check if SpatRaster is in geographic coodrinates
-  if(!terra::is.lonlat(clim_raster)) {
-    stop(crayon::red('Grid does not have geographic coordinates.'))
-
-  }
-
   ## check if secondary raster fully overlaps with user-defined extent
   if(!is.character(extent)) {
 
@@ -84,6 +78,12 @@ secondary_weights <- function(secondary_raster, grid = era5_grid, extent = "full
   } else {
 
     clim_raster <- grid
+
+  }
+
+  ## check if SpatRaster is in geographic coodrinates
+  if(!terra::is.lonlat(clim_raster)) {
+    stop(crayon::red('Grid does not have geographic coordinates.'))
 
   }
 
