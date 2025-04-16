@@ -8,6 +8,7 @@
 #' @param polygon_id_col the name of a column in the `polygons` object with a
 #'   unique identifier for each polygon
 #' @param grid a raster layer with the same spatial resolution as the data
+#' (must use geographic coordinates)
 #' @param secondary_weights an optional table of secondary weights, output from
 #'   the `secondary_weights()` function
 #'
@@ -66,6 +67,12 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
   rast_xmax <- terra::ext(clim_area_raster)$xmax
   rast_res <-  terra::xres(clim_area_raster)
 
+  ## check if SpatRaster is in geographic coodrinates
+  if(!terra::is.lonlat(clim_raster)) {
+    stop(crayon::red('Grid does not have geographic coordinates.'))
+
+  }
+
  ## stop if polygons are not in standard coordinate system
  if(poly_xmax > 180) {
 
@@ -78,7 +85,7 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
 
     # Make sure the cell widths aren't peculiar otherwise the rotate function will
     # mess things up
-    if(360 %% terra::xres(grid) != 0){
+    if(360 %% terra::xres(clim_raster) != 0){
       stop(crayon::red('Grid is in climate coordinate system (longitude 0 to 360) and grid cell width does not divide 360 evenly, making accurate alignment impossible.'))
     }
 
@@ -180,25 +187,19 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
     w_merged[, weight := weight * w_area]
 
     # Create column that determines if entire polygon has a weight == 0
-    zero_polys <- data.frame(w_merged) |>
-      dplyr::group_by(poly_id) |>
-      dplyr::summarise(sum_weight = sum(weight)) |>
-      dplyr::ungroup() |>
-      dplyr::filter(sum_weight == 0) |>
-      dplyr::select(poly_id) |>
-      dplyr::distinct()
+    zero_polys <- w_merged[, .(sum_weight = sum(weight)),
+                                by = .(poly_id)]
 
-    if(nrow(zero_polys > 0)) {
+    zero_polys <- unique(zero_polys[sum_weight == 0, .(poly_id)])
+
+    if(nrow(zero_polys) > 0) {
 
       warning(crayon::red("Warning: weight = 0 for all pixels in some of your polygons; NAs will be returned for weights"))
 
     }
 
     # List any polygons with NA values in 1 or more grid cells
-    na_polys <- data.frame(w_merged) |>
-      dplyr::filter(is.na(weight)) |>
-      dplyr::select(poly_id) |>
-      dplyr::distinct()
+    na_polys <- unique(w_merged[is.na(weight), .(poly_id)])
 
     # # Warning if there are polygons with NA weight values
     # if(nrow(na_polys > 0)) {
@@ -208,12 +209,8 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
     # }
 
     # Update the weight to NA for all grid cells in na_polys
-    w_merged <- w_merged |>
-      dplyr::mutate(weight = ifelse(poly_id %in% c(na_polys$poly_id, zero_polys$poly_id), NA, weight)) |>
-      data.table::as.data.table()
-
-    ## this doesn't work with dt... figure out or delete and use above
-    # w_merged[, weight := data.table::fifelse(poly_id %in% c(na_polys$poly_id, zero_polys$poly_id), NA, weight)]
+    w_merged <- w_merged[, weight := ifelse(poly_id %in% c(na_polys$poly_id,
+                                                           zero_polys$poly_id), NA, weight)]
 
   }
 
@@ -246,7 +243,7 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
   # Check that polygon weights sum to 1 or 0 if all weights are NA
   if (!is.null(secondary_weights)){
 
-    for(i in nrow(check_weights)){
+    for(i in seq_len(nrow(check_weights))){
 
       if(!dplyr::near(check_weights$w_area[i], 1, tol=0.001)) {
 
@@ -261,7 +258,7 @@ overlay_weights <- function(polygons, polygon_id_col, grid = era5_grid, secondar
 
     } else {
 
-    for(i in nrow(check_weights)){
+    for(i in seq_len(nrow(check_weights))){
 
       if(!dplyr::near(check_weights$w_sum[i], 1, tol=0.001)){
 
