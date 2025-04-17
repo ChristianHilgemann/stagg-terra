@@ -8,7 +8,7 @@
 #' @param polygon_id_col the name of a column in the `polygons` object with a
 #'   unique identifier for each polygon
 #' @param grid a raster layer with the same spatial resolution as the data
-#' (must use geographic coordinates)
+#'   (must use geographic coordinates)
 #' @param secondary_weights an optional table of secondary weights, output from
 #'   the `secondary_weights()` function
 #'
